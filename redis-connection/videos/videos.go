@@ -2,7 +2,8 @@ package main
 
 import (
 	"encoding/json"
-	"io/ioutil"
+
+	"github.com/go-redis/redis/v8"
 )
 
 type video struct {
@@ -15,31 +16,50 @@ type video struct {
 
 func getVideos() (videos []video) {
 
-	fileBytes, err := ioutil.ReadFile("./videos.json")
+	keys, err := redisClient.Keys(ctx, "*").Result()
 
 	if err != nil {
 		panic(err)
 	}
 
-	err = json.Unmarshal(fileBytes, &videos)
-
-	if err != nil {
-		panic(err)
+	for _, key := range keys {
+		video := getVideo(key)
+		videos = append(videos, video)
 	}
 
 	return videos
 }
 
+func saveVideo(video video) {
+
+	videoBytes, err := json.Marshal(video)
+	if err != nil {
+		panic(err)
+	}
+
+	err = redisClient.Set(ctx, video.Id, videoBytes, 0).Err()
+	if err != nil {
+		panic(err)
+	}
+}
+
 func saveVideos(videos []video) {
+	for _, video := range videos {
+		saveVideo(video)
+	}
+}
 
-	videoBytes, err := json.Marshal(videos)
+func getVideo(id string) (video video) {
+
+	value, err := redisClient.Get(ctx, id).Result()
+
 	if err != nil {
 		panic(err)
 	}
 
-	err = ioutil.WriteFile("./videos.json", videoBytes, 0644)
-	if err != nil {
-		panic(err)
+	if err != redis.Nil {
+		err = json.Unmarshal([]byte(value), &video)
 	}
 
+	return video
 }
